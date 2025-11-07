@@ -1,0 +1,218 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+    <title>Meus Gastos 💸</title>
+
+    <!-- Tailwind -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+      tailwind.config = { darkMode: 'class' }
+    </script>
+
+    <!-- React + Babel -->
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+    <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <style>
+      :root {
+        --main-green: #22c55e; /* verde menta vibrante */
+        --main-blue: #3b82f6;
+        --light-mint: #ecfdf5;
+        --accent-yellow: #fde047;
+        --text-color: #111827;
+      }
+
+      body {
+        font-family: "Inter", sans-serif;
+        background: linear-gradient(180deg, var(--light-mint), #fff);
+        color: var(--text-color);
+      }
+
+      .app-frame {
+        max-width: 420px;
+        margin: auto;
+        min-height: 100vh;
+        background: white;
+        border-radius: 20px;
+        box-shadow: 0 4px 20px rgba(0,0,0,0.15);
+        overflow: hidden;
+      }
+
+      .main-header {
+        background: linear-gradient(135deg, var(--main-green), var(--main-blue));
+        color: white;
+        padding: 20px;
+        text-align: center;
+      }
+
+      .chart-card {
+        background: white;
+        border-radius: 16px;
+        box-shadow: 0 6px 15px rgba(0,0,0,0.08);
+        transition: transform .2s;
+      }
+      .chart-card:hover {
+        transform: scale(1.01);
+      }
+
+      .fab {
+        background: var(--accent-yellow);
+        color: #222;
+        box-shadow: 0 5px 12px rgba(0,0,0,0.2);
+        transition: transform .15s, box-shadow .15s;
+      }
+      .fab:hover {
+        transform: scale(1.05);
+        box-shadow: 0 8px 18px rgba(0,0,0,0.25);
+      }
+
+      .donut-center {
+        position: absolute;
+        inset: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        pointer-events: none;
+        font-size: 1.2rem;
+        font-weight: bold;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+
+    <script type="text/babel">
+      const { useState, useEffect, useMemo, useRef } = React;
+
+      const CATEGORIES = [
+        { id: 'alimentacao', name: 'Alimentação', color: '#22c55e', icon: '🍽️' },
+        { id: 'moradia', name: 'Moradia', color: '#3b82f6', icon: '🏠' },
+        { id: 'lazer', name: 'Lazer', color: '#f59e0b', icon: '🎮' },
+        { id: 'transporte', name: 'Transporte', color: '#ef4444', icon: '🚗' },
+        { id: 'educacao', name: 'Educação', color: '#8b5cf6', icon: '📚' },
+        { id: 'outros', name: 'Outros', color: '#6b7280', icon: '💡' },
+      ];
+
+      function Donut({ items, total }) {
+        const canvasRef = useRef(null);
+        useEffect(() => {
+          const ctx = canvasRef.current.getContext('2d');
+          const old = Chart.getChart(canvasRef.current);
+          if (old) old.destroy();
+
+          new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+              labels: items.map(i => i.name),
+              datasets: [{
+                data: items.map(i => i.value),
+                backgroundColor: items.map(i => i.color),
+                borderWidth: 3,
+                borderColor: '#fff'
+              }]
+            },
+            options: {
+              cutout: '70%',
+              plugins: { legend: { display: false } },
+              animation: { animateScale: true }
+            }
+          });
+        }, [items]);
+
+        return (
+          <div className="relative w-64 h-64 mx-auto">
+            <canvas ref={canvasRef}></canvas>
+            <div className="donut-center">{`R$ ${total.toFixed(2)}`}</div>
+          </div>
+        );
+      }
+
+      function App() {
+        const [transactions, setTransactions] = useState([]);
+        const [screen, setScreen] = useState('cadastro');
+        const [profile, setProfile] = useState({ nome: '', data: '' });
+
+        const total = useMemo(() => {
+          return transactions.reduce((sum, t) => sum + t.value, 0);
+        }, [transactions]);
+
+        const byCategory = useMemo(() => {
+          const map = {};
+          transactions.forEach(t => {
+            map[t.cat] = (map[t.cat] || 0) + t.value;
+          });
+          return Object.entries(map).map(([id, value]) => {
+            const cat = CATEGORIES.find(c => c.id === id);
+            return { ...cat, value };
+          });
+        }, [transactions]);
+
+        if (screen === 'cadastro') {
+          return (
+            <div className="app-frame flex flex-col justify-center items-center p-6">
+              <h1 className="text-3xl font-bold text-green-600 mb-4">👋 Bem-vindo!</h1>
+              <p className="text-gray-600 mb-4">Preencha seus dados para começar</p>
+              <input type="text" placeholder="Seu nome" className="border rounded-md p-2 mb-3 w-full"
+                value={profile.nome} onChange={e => setProfile({...profile, nome: e.target.value})}/>
+              <input type="date" className="border rounded-md p-2 mb-3 w-full"
+                value={profile.data} onChange={e => setProfile({...profile, data: e.target.value})}/>
+              <button onClick={() => setScreen('dashboard')}
+                className="bg-green-500 hover:bg-green-600 text-white px-6 py-2 rounded-full shadow-md transition">Começar</button>
+            </div>
+          );
+        }
+
+        return (
+          <div className="app-frame flex flex-col h-screen">
+            <div className="main-header">
+              <h1 className="text-xl font-semibold">Olá, {profile.nome || 'usuário'} 👋</h1>
+              <p className="text-sm opacity-80">Resumo financeiro</p>
+            </div>
+
+            <div className="p-4 flex-1 overflow-auto">
+              <div className="chart-card p-4 mb-6">
+                <Donut items={byCategory} total={total} />
+              </div>
+
+              <div className="space-y-3">
+                {transactions.length === 0 && (
+                  <p className="text-gray-400 text-center">Nenhuma despesa adicionada ainda 😅</p>
+                )}
+                {transactions.map((t, i) => {
+                  const cat = CATEGORIES.find(c => c.id === t.cat);
+                  return (
+                    <div key={i} className="flex justify-between bg-gray-50 p-3 rounded-lg shadow-sm">
+                      <span>{cat.icon} {cat.name}</span>
+                      <span className="font-semibold text-red-600">-R$ {t.value.toFixed(2)}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+
+            <button
+              onClick={() => {
+                const cat = prompt('Categoria (ex: alimentacao, lazer, transporte)');
+                const val = parseFloat(prompt('Valor da despesa:'));
+                if (cat && !isNaN(val)) {
+                  setTransactions([...transactions, { cat, value: val }]);
+                }
+              }}
+              className="fab absolute bottom-6 right-6 w-14 h-14 rounded-full flex items-center justify-center text-3xl"
+            >
+              +
+            </button>
+          </div>
+        );
+      }
+
+      ReactDOM.render(<App />, document.getElementById('root'));
+    </script>
+  </body>
+</html>
