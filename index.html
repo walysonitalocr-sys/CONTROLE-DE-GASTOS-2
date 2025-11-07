@@ -1,0 +1,619 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Meus Gastos — App Style</title>
+
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+
+  <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+  <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    :root {
+      --main-green: #4CAF50;
+      --light-mint: #E8F5E9;
+      --accent-yellow: #FFC107;
+      --accent-red: #F44336;
+      --text-color: #212121;
+    }
+
+    body { 
+      -webkit-font-smoothing: antialiased; 
+      -moz-osx-font-smoothing: grayscale; 
+      background: linear-gradient(135deg, #E8F5E9 0%, #C8E6C9 100%);
+      color: var(--text-color);
+      font-family: 'Segoe UI', system-ui, -apple-system, sans-serif;
+    }
+
+    #root {
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      min-height: 100vh;
+      padding: 20px;
+    }
+    
+    .app-frame {
+      width: 100%;
+      max-width: 420px;
+      height: 90vh;
+      max-height: 900px;
+      background: rgba(255, 255, 255, 0.95);
+      backdrop-filter: blur(10px);
+      box-shadow: 0 25px 50px rgba(0, 0, 0, 0.15);
+      border-radius: 24px;
+      overflow: hidden;
+      position: relative;
+      display: flex;
+      flex-direction: column;
+    }
+    
+    .main-header {
+      background: linear-gradient(135deg, var(--main-green) 0%, #388E3C 100%);
+      color: white;
+      padding: 20px;
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+    }
+    
+    .tab-active {
+      border-bottom: 3px solid white;
+      padding-bottom: 2px;
+    }
+    
+    .fab {
+      background: linear-gradient(135deg, var(--accent-yellow) 0%, #FFA000 100%);
+      box-shadow: 0 6px 16px rgba(255, 193, 7, 0.4);
+      transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .fab:hover {
+      transform: translateY(-2px) scale(1.05);
+      box-shadow: 0 8px 20px rgba(255, 193, 7, 0.5);
+    }
+    
+    .fab:active {
+      transform: translateY(0) scale(0.95);
+    }
+
+    .chart-card {
+      background: white;
+      border-radius: 16px;
+      box-shadow: 0 8px 20px rgba(0, 0, 0, 0.08);
+      transition: transform 0.3s ease, box-shadow 0.3s ease;
+    }
+    
+    .chart-card:hover {
+      box-shadow: 0 12px 24px rgba(0, 0, 0, 0.12);
+    }
+    
+    .value-display {
+      border-bottom: 2px solid var(--main-green);
+      padding-bottom: 4px;
+      transition: border-color 0.3s;
+    }
+    
+    .keypad-btn {
+      background: #F5F5F5;
+      border-radius: 12px;
+      color: #424242;
+      font-size: 1.5rem;
+      font-weight: 500;
+      transition: all 0.1s ease;
+      border: 1px solid #E0E0E0;
+    }
+    
+    .keypad-btn:active {
+      background: #E0E0E0;
+      transform: scale(0.95);
+    }
+    
+    .keypad-ok {
+      background: linear-gradient(135deg, var(--main-green) 0%, #388E3C 100%);
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 4px 8px rgba(76, 175, 80, 0.3);
+    }
+    
+    .keypad-ok:active {
+      background: linear-gradient(135deg, #388E3C 0%, #2E7D32 100%);
+      box-shadow: 0 2px 4px rgba(76, 175, 80, 0.4);
+    }
+    
+    .category-chip {
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    
+    .category-chip:hover {
+      transform: translateY(-2px);
+    }
+    
+    .category-chip.selected {
+      box-shadow: 0 0 0 2px var(--main-green), 0 4px 12px rgba(76, 175, 80, 0.2);
+    }
+    
+    .transaction-item {
+      transition: all 0.2s ease;
+    }
+    
+    .transaction-item:hover {
+      background: rgba(76, 175, 80, 0.05);
+      border-radius: 8px;
+    }
+  </style>
+</head>
+<body>
+
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* ---------------- CONFIG ---------------- */
+const APP_NAME = "Meu Gestor Financeiro";
+const PROFILE_KEY = "meus_gastos_profile_v1";
+const TX_KEY = "meus_gastos_transactions_v1";
+
+/* ---------------- ICONS ---------------- */
+function IconHeart(){ return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>); }
+function IconLazer() { return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>); }
+function IconCasa(){ return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>); }
+function IconCafe(){ return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>); }
+function IconMarket(){ return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v12M12 3v12M18 3v12"/><path d="M4 18h16a2 2 0 0 1 2 2v2H2v-2a2 2 0 0 1 2-2z"/></svg>);}
+function IconEducation(){ return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l10 5.5v11L12 22 2 17.5V6.5L12 2zM12 22v-9M22 8l-10 5.5L2 8"/></svg>);}
+function IconOthers(){ return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>);}
+
+const CATEGORIES = [
+  { id: 'saude', name: 'Saúde', color: '#F44336', icon: IconHeart },
+  { id: 'lazer', name: 'Lazer', color: '#FFC107', icon: IconLazer },
+  { id: 'moradia', name: 'Casa', color: '#2196F3', icon: IconCasa },
+  { id: 'alimentacao', name: 'Café', color: '#009688', icon: IconCafe },
+  { id: 'compras', name: 'Compras', color: '#4CAF50', icon: IconMarket },
+  { id: 'educacao', name: 'Educação', color: '#9C27B0', icon: IconEducation },
+  { id: 'outros', name: 'Outros', color: '#9E9E9E', icon: IconOthers },
+];
+
+/* ---------------- HELPERS ---------------- */
+function genId(){ return 'id-' + Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8); }
+function monthKeyFromDate(dateStr){ return dateStr ? dateStr.slice(0, 7) : new Date().toISOString().slice(0, 7); }
+function formatBRL(amount){ return `R$ ${Number(amount).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`; }
+
+function loadTransactions(){
+  try {
+    const raw = localStorage.getItem(TX_KEY);
+    if(!raw){
+      const today = new Date().toISOString().slice(0, 10);
+      return [
+        { id: genId(), type: 'income', category: 'outros', amount: 3500, date: today, description: 'Salário', fixed: false },
+        { id: genId(), type: 'expense', category: 'saude', amount: 200, date: today, description: 'Plano de Saúde', fixed: true },
+        { id: genId(), type: 'expense', category: 'compras', amount: 450, date: today, description: 'Mercado', fixed: false },
+        { id: genId(), type: 'expense', category: 'alimentacao', amount: 28, date: today, description: 'Café Starbucks', fixed: false },
+      ];
+    }
+    return JSON.parse(raw);
+  } catch(e) { console.error(e); return []; }
+}
+
+function saveTransactions(data){ 
+  try { localStorage.setItem(TX_KEY, JSON.stringify(data)); } catch(e) { console.error(e); } 
+}
+function loadProfile(){ 
+  try { const raw = localStorage.getItem(PROFILE_KEY); return raw ? JSON.parse(raw) : { name: 'Usuário' }; } 
+  catch { return { name: 'Usuário' }; } 
+}
+function saveProfile(p){ 
+  try { localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); } catch {} 
+}
+
+/* ---------------- DONUT CHART ---------------- */
+function Donut({ items, onSegmentClick }){
+  const canvasRef = useRef(null);
+  const totalExpense = useMemo(() => items.reduce((sum, item) => sum + item.value, 0), [items]);
+  
+  useEffect(() => {
+    if(!canvasRef.current) return;
+    
+    const chartData = items.map(i => i.value);
+    const chartLabels = items.map(i => i.name);
+    const chartColors = items.map(i => CATEGORIES.find(c => c.name === i.name)?.color || '#9E9E9E');
+
+    const centerTextPlugin = {
+      id: 'centerText',
+      beforeDraw(chart){
+        const { ctx, width, height } = chart;
+        ctx.save();
+        const value = totalExpense > 0 ? formatBRL(totalExpense) : 'R$ 0,00';
+        ctx.font = `600 ${Math.round(Math.min(width, height) / 10)}px sans-serif`;
+        ctx.fillStyle = '#424242';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(value, width / 2, height / 2);
+        ctx.restore();
+      }
+    };
+
+    const old = Chart.getChart(canvasRef.current);
+    if(old) old.destroy();
+    
+    const ch = new Chart(canvasRef.current, {
+      type: 'doughnut',
+      data: { 
+        labels: chartLabels, 
+        datasets: [{ 
+          data: chartData, 
+          backgroundColor: chartColors, 
+          borderColor: 'white', 
+          borderWidth: 3 
+        }] 
+      },
+      options: {
+        cutout: '70%',
+        plugins: { 
+          legend: { display: false },
+          tooltip: {
+            backgroundColor: 'rgba(0,0,0,0.8)',
+            padding: 12,
+            cornerRadius: 8,
+            callbacks: {
+              label: function(context) {
+                const label = context.label || '';
+                const value = formatBRL(context.parsed);
+                const percentage = totalExpense > 0 ? ((context.parsed / totalExpense) * 100).toFixed(1) : 0;
+                return `${label}: ${value} (${percentage}%)`;
+              }
+            }
+          }
+        },
+        onClick: (evt, elems) => {
+          if(elems.length > 0){
+            const idx = elems[0].index;
+            onSegmentClick && onSegmentClick(chartLabels[idx]);
+          }
+        },
+        animation: { animateScale: true, duration: 800 }
+      },
+      plugins: [centerTextPlugin]
+    });
+    
+    return () => ch.destroy();
+  }, [canvasRef, items, totalExpense, onSegmentClick]);
+  
+  return (
+    <div className="relative h-56 w-full max-w-xs mx-auto my-4">
+      <canvas ref={canvasRef} />
+    </div>
+  );
+}
+
+/* ---------------- DASHBOARD SCREEN ---------------- */
+function DashboardScreen({ expensesByCategory, onAddClick }){
+  const [activeTab, setActiveTab] = useState('Semana');
+  const totalExpenses = useMemo(() => expensesByCategory.reduce((sum, item) => sum + item.value, 0), [expensesByCategory]);
+  
+  const dateRange = "18 fev – 24 fev"; // Simulação
+
+  return (
+    <div className="flex flex-col h-full bg-gray-50">
+      {/* HEADER */}
+      <div className="main-header flex flex-col items-center">
+        <div className="flex justify-between w-full mb-2 items-center">
+          <span className="text-white/80 text-sm font-medium">Total de Despesas</span>
+          <button className="p-2 rounded-full hover:bg-white/20 transition">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/>
+              <path d="M16 8l-6 6-4-4"/>
+            </svg>
+          </button>
+        </div>
+        <div className="text-4xl font-bold mb-4 tracking-tight">{formatBRL(totalExpenses)}</div>
+        <div className="flex w-full justify-between font-semibold text-lg pt-2">
+          <span className="tab-active">DESPESAS</span>
+          <span className="opacity-80 cursor-not-allowed">RENDA</span>
+        </div>
+      </div>
+      
+      {/* CONTENT */}
+      <div className="flex-1 p-4 overflow-y-auto">
+        <div className="chart-card p-5">
+          {/* TABS */}
+          <div className="flex justify-between text-gray-500 text-sm font-medium border-b border-gray-100 pb-3 mb-4">
+            {['Dia', 'Semana', 'Mês', 'Ano', 'Período'].map(tab => (
+              <button 
+                key={tab} 
+                onClick={() => setActiveTab(tab)} 
+                className={`px-3 py-1 rounded-lg transition font-medium ${
+                  activeTab === tab 
+                    ? 'bg-green-100 text-green-700' 
+                    : 'hover:bg-gray-100'
+                }`}
+              >
+                {tab}
+              </button>
+            ))}
+          </div>
+
+          {/* DATE NAVIGATOR */}
+          <div className="flex items-center justify-between mb-4 px-2">
+            <button className="p-2 rounded-full hover:bg-gray-100 transition">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="15 18 9 12 15 6"></polyline>
+              </svg>
+            </button>
+            <span className="font-semibold text-sm text-gray-700">{dateRange}</span>
+            <button className="p-2 rounded-full hover:bg-gray-100 transition">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <polyline points="9 18 15 12 9 6"></polyline>
+              </svg>
+            </button>
+          </div>
+
+          {/* CHART */}
+          <Donut items={expensesByCategory} onSegmentClick={() => {}} />
+          
+          {/* ADD BUTTON */}
+          <div className="flex justify-end -mt-12 mb-2">
+            <button 
+              onClick={() => onAddClick('expense')} 
+              className="fab w-14 h-14 rounded-full flex items-center justify-center text-3xl font-light"
+            >
+              +
+            </button>
+          </div>
+          
+          {/* CATEGORIES LIST */}
+          <div className="mt-4 space-y-1">
+            {expensesByCategory.length > 0 ? (
+              expensesByCategory
+                .sort((a, b) => b.value - a.value)
+                .map(item => {
+                  const cat = CATEGORIES.find(c => c.name === item.name);
+                  const percent = totalExpenses > 0 ? ((item.value / totalExpenses) * 100).toFixed(0) : 0;
+                  
+                  return (
+                    <div 
+                      key={item.id} 
+                      className="transaction-item flex items-center justify-between py-3 px-2 border-b border-gray-100 last:border-b-0"
+                    >
+                      <div className="flex items-center gap-3 flex-1">
+                        <div 
+                          className="w-10 h-10 rounded-full flex items-center justify-center text-white shadow-md" 
+                          style={{ backgroundColor: cat?.color || '#9E9E9E' }}
+                        >
+                          {cat && React.createElement(cat.icon, { width: "18", height: "18", strokeWidth: "3" })}
+                        </div>
+                        <span className="text-sm font-semibold text-gray-800">{item.name}</span>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-lg font-bold text-gray-900">{formatBRL(item.value)}</div>
+                        <div className="text-xs text-gray-500">{percent}%</div>
+                      </div>
+                    </div>
+                  );
+                })
+            ) : (
+              <div className="text-center text-gray-500 text-sm py-8">
+                <div className="mb-2">📊</div>
+                Nenhuma despesa neste período
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- ADD TRANSACTION SCREEN ---------------- */
+function AddTransactionScreen({ onAdd, onBack }){
+  const [type, setType] = useState('expense');
+  const [amount, setAmount] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0].id);
+  
+  function handleKeypad(key){
+    if(key === 'OK') return handleSubmit();
+    if(key === 'DEL') return setAmount(a => a.slice(0, -1));
+    if(key === ',') {
+      return amount.includes('.') ? null : setAmount(a => a + (a.length === 0 ? '0.' : '.'));
+    }
+    if(amount.length >= 10) return;
+    setAmount(a => a + key);
+  }
+
+  function handleSubmit(){
+    const numAmount = parseFloat(amount);
+    if(isNaN(numAmount) || numAmount <= 0) {
+      alert('⚠️ Digite um valor válido.');
+      return;
+    }
+    
+    const tx = {
+      id: genId(),
+      type,
+      category: selectedCategory,
+      amount: numAmount,
+      date: new Date().toISOString().slice(0, 10),
+      description: '',
+      fixed: false
+    };
+    onAdd(tx);
+    onBack();
+  }
+  
+  // Teclado layout simplificado e correto
+  const keypadButtons = [
+    ['1', '2', '3', 'DEL'],
+    ['4', '5', '6', 'DEL'],
+    ['7', '8', '9', 'OK'],
+    ['0', ',', 'OK']
+  ];
+  
+  return (
+    <div className="flex flex-col h-full bg-white">
+      {/* HEADER */}
+      <div className="main-header flex flex-col items-center">
+        <div className="flex justify-between w-full mb-3 items-center">
+          <button onClick={onBack} className="p-2 rounded-full hover:bg-white/20 transition">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+              <line x1="19" y1="12" x2="5" y2="12"/>
+              <polyline points="12 19 5 12 12 5"/>
+            </svg>
+          </button>
+          <span className="text-white text-lg font-semibold">Nova Transação</span>
+          <span className="w-8"></span>
+        </div>
+        <div className="flex w-full justify-between font-medium text-lg pt-2">
+          <button 
+            onClick={() => setType('expense')} 
+            className={`py-1 transition ${type === 'expense' ? 'tab-active' : 'opacity-80'}`}
+          >
+            DESPESAS
+          </button>
+          <button 
+            onClick={() => setType('income')} 
+            className={`py-1 transition ${type === 'income' ? 'tab-active' : 'opacity-80'}`}
+          >
+            RENDA
+          </button>
+        </div>
+      </div>
+
+      {/* VALUE DISPLAY */}
+      <div className="p-6 border-b border-gray-100 bg-white">
+        <div className="text-right">
+          <div className="text-5xl font-light value-display inline-block">
+            <span className="text-gray-500 text-xl mr-2 align-top">BRL</span>
+            <span className="text-gray-900">{amount || '0'}</span>
+          </div>
+        </div>
+      </div>
+
+      {/* CATEGORIES */}
+      <div className="p-4 flex-1 overflow-y-auto">
+        <div className="text-sm text-gray-500 font-medium mb-3">Categoria</div>
+        <div className="grid grid-cols-4 gap-3">
+          {CATEGORIES.slice(0, 4).map(c => (
+            <button 
+              key={c.id} 
+              onClick={() => setSelectedCategory(c.id)} 
+              className={`category-chip flex flex-col items-center p-3 rounded-xl transition ${
+                selectedCategory === c.id ? 'selected' : 'hover:bg-gray-50'
+              }`}
+            >
+              <div 
+                className="w-12 h-12 rounded-full flex items-center justify-center text-white shadow-md" 
+                style={{ backgroundColor: c.color }}
+              >
+                {React.createElement(c.icon, { width: "22", height: "22", strokeWidth: "2.5" })}
+              </div>
+              <span className="text-xs mt-2 font-medium text-gray-700">{c.name}</span>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* KEYPAD */}
+      <div className="grid grid-cols-4 gap-2 p-3 bg-gray-50 border-t border-gray-200">
+        {keypadButtons.flat().map((key, index) => {
+          if(key === 'OK') {
+            return index === 15 ? (
+              <button 
+                key={`${key}-${index}`} 
+                onClick={() => handleKeypad(key)} 
+                className="keypad-ok col-span-1 h-20 flex items-center justify-center font-bold text-xl"
+              >
+                ✓
+              </button>
+            ) : null;
+          }
+          
+          if(key === 'DEL') {
+            return (
+              <button 
+                key={`${key}-${index}`} 
+                onClick={() => handleKeypad(key)} 
+                className="keypad-btn h-14 flex items-center justify-center text-red-500"
+              >
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <path d="M22 4L12 14 2 4M2 20l10-10 10 10"/>
+                </svg>
+              </button>
+            );
+          }
+          
+          return (
+            <button 
+              key={`${key}-${index}`} 
+              onClick={() => handleKeypad(key)} 
+              className="keypad-btn h-14 flex items-center justify-center font-medium"
+            >
+              {key}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+/* ---------------- MAIN APP ---------------- */
+function App(){
+  const [profile, setProfile] = useState(() => loadProfile());
+  const [transactions, setTransactions] = useState(() => loadTransactions());
+  const [screen, setScreen] = useState('dashboard');
+  const [selectedMonth, setSelectedMonth] = useState(() => monthKeyFromDate());
+
+  useEffect(() => saveProfile(profile), [profile]);
+  useEffect(() => saveTransactions(transactions), [transactions]);
+
+  // Filtra despesas do período atual
+  const currentExpenses = useMemo(() => {
+    return transactions.filter(t => t.type === 'expense' && monthKeyFromDate(t.date) === selectedMonth);
+  }, [transactions, selectedMonth]);
+
+  // Agrupa por categoria
+  const expensesByCategory = useMemo(() => {
+    const map = {};
+    currentExpenses.forEach(t => {
+      const catName = CATEGORIES.find(c => c.id === t.category)?.name || 'Outros';
+      map[catName] = (map[catName] || 0) + t.amount;
+    });
+    
+    return Object.entries(map).map(([name, value]) => {
+      const cat = CATEGORIES.find(c => c.name === name) || CATEGORIES.find(c => c.id === 'outros');
+      return { id: cat.id, name, value };
+    }).filter(d => d.value > 0);
+  }, [currentExpenses]);
+
+  function addTransaction(tx){ 
+    setTransactions(prev => [tx, ...prev]); 
+  }
+
+  return (
+    <div className="app-frame">
+      {screen === 'dashboard' && (
+        <DashboardScreen 
+          expensesByCategory={expensesByCategory}
+          onAddClick={() => setScreen('add')}
+        />
+      )}
+      
+      {screen === 'add' && (
+        <AddTransactionScreen 
+          onAdd={addTransaction}
+          onBack={() => setScreen('dashboard')}
+        />
+      )}
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+</script>
+</body>
+</html>
