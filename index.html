@@ -1,0 +1,562 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Meus Gastos Pro — Meus Gastos</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* Melhoria Visual: Cores e Sombra mais profissionais */
+    :root {
+      --primary: #10B981; /* Verde esmeralda */
+      --accent: #3B82F6;  /* Azul vibrante */
+      --muted: #64748b;
+    }
+
+    body { -webkit-font-smoothing:antialiased; -moz-osx-font-smoothing:grayscale; }
+    /* Gradiente horizontal suave para botões */
+    .accent-btn { 
+      background-image: linear-gradient(to right, var(--primary), var(--accent)); 
+      color: white; 
+      transition: all 0.2s ease; 
+    }
+    .accent-btn:hover { opacity: 0.9; }
+
+    /* Card com borda e sombra mais sutis */
+    .card { 
+      background: white; 
+      border-radius: 16px; 
+      box-shadow: 0 4px 12px rgba(15,23,42,0.04), 0 1px 2px rgba(15,23,42,0.02);
+      border: 1px solid #e2e8f0; 
+      transition: transform 0.18s ease;
+    }
+    .dark .card { 
+      background: #1f2937;
+      box-shadow: 0 6px 20px rgba(2,6,23,0.3); 
+      border: 1px solid #374151;
+    }
+    .chip { transition: transform .12s ease, box-shadow .12s ease; }
+    .chip:active { transform: translateY(1px); }
+    
+    canvas { max-width: 100% !important; height: auto !important; }
+    .donut-center { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+    @media (max-width: 768px) { .app-shell { padding: 16px; } }
+  </style>
+</head>
+<body class="bg-gray-50 dark:bg-gray-900 text-gray-900 dark:text-gray-100">
+
+<div id="root"></div>
+
+<script type="text/babel">
+/* Single-file React app: Meus Gastos Pro (Design Aprimorado) */
+/* Globals available: React, ReactDOM, Chart */
+
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* ---------------- CONFIG ---------------- */
+const APP_NAME = "Meus Gastos Pro";
+const PROFILE_KEY = "meus_gastos_profile_v1";
+const TX_KEY = "meus_gastos_transactions_v1";
+
+/* ---------------- CATEGORIES + ICONS ---------------- */
+/* Icons as React components (inline SVG) */
+function IconFork() {
+  return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M8 2v8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><path d="M11 2v8" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><path d="M5 15v6" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/><path d="M5 21h10" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round"/></svg>);
+}
+function IconCar() {
+  return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="3" y="7" width="18" height="8" rx="2" stroke="currentColor" strokeWidth="1.2"/><circle cx="7.5" cy="17.5" r="1.5" fill="currentColor"/><circle cx="16.5" cy="17.5" r="1.5" fill="currentColor"/></svg>);
+}
+function IconStar(){ return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 17.3l-6.16 3.24 1.18-6.88L2 9.76l6.92-1.01L12 2l3.08 6.75L22 9.76l-5.02 3.9 1.18 6.88z" stroke="currentColor" strokeWidth="0.7"/></svg>); }
+function IconHome(){ return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M3 11.5L12 4l9 7.5" stroke="currentColor" strokeWidth="1.2"/><path d="M5 21V12h14v9" stroke="currentColor" strokeWidth="1.2"/></svg>); }
+function IconCard(){ return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><rect x="2" y="5" width="20" height="14" rx="2" stroke="currentColor" strokeWidth="1.2"/><path d="M2 10h20" stroke="currentColor" strokeWidth="1.2"/></svg>); }
+function IconBook(){ return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M4 19.5V6a2 2 0 0 1 2-2h11" stroke="currentColor" strokeWidth="1.2"/><path d="M20 7v12.5a.5.5 0 0 1-.65.48C18.44 19.6 16.6 19 14 19c-1.1 0-2 .1-3 .5V6" stroke="currentColor" strokeWidth="1.2"/></svg>); }
+function IconWifi(){ return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M2 8.5a15 15 0 0 1 20 0" stroke="currentColor" strokeWidth="1.2"/><path d="M6 12a9 9 0 0 1 12 0" stroke="currentColor" strokeWidth="1.2"/><path d="M10 16a3 3 0 0 1 4 0" stroke="currentColor" strokeWidth="1.2"/></svg>); }
+function IconBolt(){ return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" stroke="currentColor" strokeWidth="1.1"/></svg>); }
+function IconWater(){ return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 2s5 4.5 5 8.5A5 5 0 0 1 7 10.5C7 6.5 12 2 12 2z" stroke="currentColor" strokeWidth="1.1"/></svg>); }
+function IconHeart(){ return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><path d="M12 21s-7-4.35-9-7.04A5.56 5.56 0 0 1 7 6.04 5 5 0 0 1 12 9a5 5 0 0 1 5-2.96c2 0 5 2.96 4 7.92C19 16.65 12 21 12 21z" stroke="currentColor" strokeWidth="1.1"/></svg>); }
+function IconDots(){ return (<svg width="18" height="18" viewBox="0 0 24 24" fill="none"><circle cx="5" cy="12" r="1.5" fill="currentColor"/><circle cx="12" cy="12" r="1.5" fill="currentColor"/><circle cx="19" cy="12" r="1.5" fill="currentColor"/></svg>); }
+
+const CATEGORIES = [
+  { id: 'alimentacao', name: 'Alimentação', color:'#10B981', Icon: IconFork },
+  { id: 'transporte', name: 'Transporte', color:'#059669', Icon: IconCar },
+  { id: 'lazer', name: 'Lazer', color:'#F59E0B', Icon: IconStar },
+  { id: 'moradia', name: 'Moradia', color:'#3B82F6', Icon: IconHome },
+  { id: 'cartoes', name: 'Cartões', color:'#7C3AED', Icon: IconCard },
+  { id: 'faculdade', name: 'Faculdade', color:'#06B6D4', Icon: IconBook },
+  { id: 'internet', name: 'Internet', color:'#60A5FA', Icon: IconWifi },
+  { id: 'luz', name: 'Luz', color:'#F97316', Icon: IconBolt },
+  { id: 'agua', name: 'Água', color:'#06B6D4', Icon: IconWater },
+  { id: 'saude', name: 'Saúde', color:'#84CC16', Icon: IconHeart },
+  { id: 'outros', name: 'Outros', color:'#94A3B8', Icon: IconDots },
+];
+
+/* ---------------- helpers ---------------- */
+function genId(){ return 'id-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8); }
+function monthKeyFromDate(dateStr){ return dateStr ? dateStr.slice(0,7) : new Date().toISOString().slice(0,7); }
+function addOneMonthToDate(dateStr){
+  const d = dateStr ? new Date(dateStr + 'T00:00:00') : new Date();
+  const day = d.getDate(), m = d.getMonth(), y = d.getFullYear();
+  let nm = m + 1, ny = y; if(nm > 11){ nm = 0; ny = y + 1; }
+  const cand = new Date(ny, nm, day);
+  if(cand.getMonth() !== nm){
+    const lastDay = new Date(ny, nm+1, 0).getDate();
+    return `${ny}-${String(nm+1).padStart(2,'0')}-${String(lastDay).padStart(2,'0')}`;
+  }
+  return `${ny}-${String(nm+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;
+}
+
+/* ---------------- storage ---------------- */
+function loadProfile(){ try{ const raw = localStorage.getItem(PROFILE_KEY); return raw ? JSON.parse(raw) : null; }catch{return null;} }
+function saveProfile(p){ try{ localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); }catch{} }
+function loadTransactions(){
+  try{
+    const raw = localStorage.getItem(TX_KEY);
+    if(!raw){
+      // sample initial
+      return [
+        { id:genId(), type:'income', category:'outros', amount:2500, date:'2025-10-01', description:'Salário', fixed:false },
+        { id:genId(), type:'expense', category:'moradia', amount:1200, date:'2025-10-01', description:'Aluguel', fixed:true },
+        { id:genId(), type:'expense', category:'luz', amount:120, date:'2025-10-05', description:'Conta de luz', fixed:true },
+        { id:genId(), type:'expense', category:'agua', amount:60, date:'2025-10-06', description:'Conta de água', fixed:true },
+        { id:genId(), type:'expense', category:'internet', amount:99.9, date:'2025-10-10', description:'Internet', fixed:true },
+        { id:genId(), type:'expense', category:'alimentacao', amount:45.5, date:'2025-10-25', description:'Almoço', fixed:false },
+        { id:genId(), type:'expense', category:'transporte', amount:150, date:'2025-10-15', description:'Combustível', fixed:false },
+      ];
+    }
+    return JSON.parse(raw);
+  }catch(e){ console.error(e); return []; }
+}
+function saveTransactions(data){ try{ localStorage.setItem(TX_KEY, JSON.stringify(data)); }catch(e){ console.error(e); } }
+
+/* ---------------- ThemeToggle ---------------- */
+function ThemeToggle(){
+  const [dark, setDark] = useState(()=> localStorage.getItem('theme') === 'dark');
+  useEffect(()=> {
+    const root = document.documentElement;
+    if(dark) root.classList.add('dark'); else root.classList.remove('dark');
+    localStorage.setItem('theme', dark ? 'dark' : 'light');
+  }, [dark]);
+  return (
+    <button onClick={()=> setDark(d => !d)} className="p-2 rounded-lg bg-white dark:bg-gray-800 border dark:border-gray-700 shadow-sm transition">
+      {dark ? '🌙' : '☀️'}
+    </button>
+  );
+}
+
+/* ---------------- Charts: donut with center text ---------------- */
+function Donut({ items, total, colors, onSegmentClick }){
+  const canvasRef = useRef(null);
+  useEffect(()=>{
+    if(!canvasRef.current) return;
+    const labels = items.map(i => i.name);
+    const vals = items.map(i => i.value);
+    const bg = colors.length >= vals.length ? colors.slice(0, vals.length) : colors;
+    // plugin to draw center text
+    const centerPlugin = {
+      id: 'centerText',
+      beforeDraw(chart){
+        const { ctx, width, height } = chart;
+        ctx.save();
+        const value = total !== undefined ? `R$ ${Number(total).toFixed(2)}` : '';
+        ctx.font = `800 ${Math.round(Math.min(width, height)/12)}px sans-serif`;
+        ctx.fillStyle = document.documentElement.classList.contains('dark') ? '#E6EEF8' : '#0f1724';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(value, width/2, height/2 - 6);
+        ctx.font = `400 ${Math.round(Math.min(width, height)/26)}px sans-serif`;
+        ctx.fillText('Total Gasto', width/2, height/2 + 20);
+        ctx.restore();
+      }
+    };
+
+    const old = Chart.getChart(canvasRef.current);
+    if(old) old.destroy();
+    const ch = new Chart(canvasRef.current, {
+      type: 'doughnut',
+      data: { labels, datasets: [{ data: vals, backgroundColor: bg, borderColor: document.documentElement.classList.contains('dark') ? '#1f2937' : 'white', borderWidth: 3 }] },
+      options: {
+        cutout: '68%',
+        plugins: { legend: { display: false } },
+        onClick(evt, elems){
+          if(elems.length > 0){
+            const idx = elems[0].index;
+            onSegmentClick && onSegmentClick(labels[idx]);
+          }
+        },
+        animation: { animateScale: true }
+      },
+      plugins: [centerPlugin]
+    });
+    return () => ch.destroy();
+  }, [canvasRef, items, total, colors, onSegmentClick]);
+  return (
+    <div className="relative">
+      <canvas ref={canvasRef} className="w-full h-48" />
+    </div>
+  );
+}
+
+/* ---------------- Bar chart ---------------- */
+function FlowBar({ data }){
+  const canvasRef = useRef(null);
+  useEffect(()=>{
+    if(!canvasRef.current) return;
+    const labels = data.map(d => d.label);
+    const vals = data.map(d => d.value);
+    const old = Chart.getChart(canvasRef.current);
+    if(old) old.destroy();
+    const ch = new Chart(canvasRef.current, {
+      type: 'bar',
+      data: { labels, datasets: [{ label:'Fluxo (R$)', data: vals, backgroundColor: '#3B82F6', borderRadius: 4 }] },
+      options: { 
+        plugins:{ legend:{ display:false } }, 
+        scales:{ 
+          y:{ beginAtZero:true, grid: { color: document.documentElement.classList.contains('dark') ? '#374151' : '#f3f4f6' } },
+          x: { grid: { display: false } }
+        } 
+      }
+    });
+    return () => ch.destroy();
+  }, [canvasRef, data]);
+  return <canvas ref={canvasRef} className="w-full h-44" />;
+}
+
+/* ---------------- Components ---------------- */
+
+function ProfileForm({ onSave }){
+  const [name, setName] = useState('');
+  const [dob, setDob] = useState('');
+  function submit(e){ e.preventDefault(); if(!name) return alert('Digite seu nome'); onSave({ name, dob }); }
+  return (
+    <form onSubmit={submit} className="space-y-4">
+      <input value={name} onChange={e=>setName(e.target.value)} placeholder="Seu nome" className="w-full p-3 rounded-lg border dark:border-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500" />
+      <input value={dob} onChange={e=>setDob(e.target.value)} type="date" className="w-full p-3 rounded-lg border dark:border-gray-700 dark:bg-gray-800 focus:ring-2 focus:ring-blue-500" />
+      <button className="w-full py-3 rounded-lg accent-btn font-semibold shadow-lg shadow-blue-500/50">Começar</button>
+    </form>
+  );
+}
+
+function TransactionForm({ onAdd, editing, onUpdate, onCancel }){
+  const [form, setForm] = useState({ type:'expense', category:'alimentacao', amount:'', date:'', description:'', fixed:false });
+  useEffect(()=> { if(editing) setForm(editing); else setForm({ type:'expense', category:'alimentacao', amount:'', date:'', description:'', fixed:false }); }, [editing]);
+
+  function handle(e){
+    const { name, value, type, checked } = e.target;
+    setForm(prev => ({ ...prev, [name]: type === 'checkbox' ? checked : value }));
+  }
+  function submit(e){
+    e.preventDefault();
+    if(!form.amount || isNaN(Number(form.amount))) return alert('Digite um valor válido');
+    const payload = { ...form, id: form.id || genId(), amount: Number(form.amount), date: form.date || new Date().toISOString().slice(0,10) };
+    editing ? onUpdate(payload) : onAdd(payload);
+    setForm({ type:'expense', category:'alimentacao', amount:'', date:'', description:'', fixed:false });
+  }
+
+  return (
+    <form onSubmit={submit} className="p-5 card">
+      <h3 className="text-xl font-bold mb-4">{editing ? 'Editar Transação' : 'Nova Transação'}</h3>
+      <div className="grid grid-cols-2 gap-3 mb-3">
+        <select name="type" value={form.type} onChange={handle} className="p-2 rounded-lg border dark:border-gray-700 dark:bg-gray-800 text-sm">
+          <option value="expense">Despesa</option>
+          <option value="income">Receita</option>
+        </select>
+        <select name="category" value={form.category} onChange={handle} className="p-2 rounded-lg border dark:border-gray-700 dark:bg-gray-800 text-sm">
+          {CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.name}</option>)}
+        </select>
+      </div>
+
+      <input name="amount" value={form.amount} onChange={handle} placeholder="Valor (ex: 45.50)" type="number" step="0.01" className="w-full p-2 rounded-lg mb-2 border dark:border-gray-700 dark:bg-gray-800" />
+      <input name="date" type="date" value={form.date} onChange={handle} className="w-full p-2 rounded-lg mb-2 border dark:border-gray-700 dark:bg-gray-800" />
+      <input name="description" value={form.description} onChange={handle} placeholder="Descrição (opcional)" className="w-full p-2 rounded-lg mb-3 border dark:border-gray-700 dark:bg-gray-800" />
+
+      <label className="flex items-center gap-2 mb-4 text-sm text-gray-600 dark:text-gray-300">
+        <input type="checkbox" name="fixed" checked={form.fixed} onChange={handle} className="rounded text-blue-600 focus:ring-blue-500" /> <span>Marcar como despesa fixa</span>
+      </label>
+
+      <div className="flex gap-2">
+        <button type="submit" className="flex-1 py-3 rounded-lg accent-btn font-semibold shadow-md">{editing ? 'Atualizar Transação' : 'Adicionar Transação'}</button>
+        {editing && <button type="button" onClick={onCancel} className="px-4 py-3 rounded-lg border dark:border-gray-700 dark:bg-gray-800 text-sm hover:bg-gray-100 dark:hover:bg-gray-700 transition">Cancelar</button>}
+      </div>
+    </form>
+  );
+}
+
+function TransactionList({ transactions, onEdit, onDelete, onToggleFixed }){
+  function catName(id){ return CATEGORIES.find(c=>c.id===id)?.name || id; }
+  function catColor(id){ return CATEGORIES.find(c=>c.id===id)?.color || '#94A3B8'; }
+  
+  return (
+    <div className="p-5 card">
+      <h3 className="text-xl font-bold mb-4 border-b pb-2 dark:border-gray-700">Histórico de Transações</h3>
+      <div className="space-y-3 max-h-96 overflow-y-auto pr-2">
+        {transactions.length === 0 && <div className="text-sm text-gray-500 text-center py-4">Nenhuma transação registrada para o mês selecionado.</div>}
+        {transactions.map(t => (
+          <div key={t.id} className="flex items-center justify-between p-3 rounded-lg bg-gray-50 dark:bg-gray-800 hover:bg-gray-100 dark:hover:bg-gray-700 transition">
+            <div className="flex items-center gap-3">
+              <div className="w-2 h-10 rounded-full" style={{backgroundColor: t.type === 'income' ? '#10B981' : catColor(t.category)}}></div>
+              <div>
+                <div className="text-base font-medium">{t.description || catName(t.category)}</div>
+                <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{catName(t.category)} • {t.date}</div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3">
+              <div className={`${t.type === 'income' ? 'text-green-600 dark:text-green-400' : 'text-red-500 dark:text-red-400'} font-bold`}>R$ {Number(t.amount).toFixed(2)}</div>
+              
+              <label title="Despesa fixa" className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400 cursor-pointer">
+                <input type="checkbox" checked={!!t.fixed} onChange={()=> onToggleFixed(t.id)} className="rounded text-blue-600" />
+              </label>
+              
+              <button onClick={()=> onEdit(t)} className="text-sm text-blue-500 hover:text-blue-600 transition">Editar</button>
+              <button onClick={()=> { if(confirm('Excluir essa transação?')) onDelete(t.id) }} className="text-sm text-red-500 hover:text-red-600 transition">Excluir</button>
+            </div>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+function CategoryChips({ active, onSelect }){
+  return (
+    <div className="flex flex-wrap gap-2">
+      <button onClick={()=> onSelect(null)} className={`chip px-3 py-1 rounded-full text-sm font-medium transition ${active===null ? 'bg-blue-600 text-white shadow-md' : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'}`}>Todos</button>
+      {CATEGORIES.map(c => (
+        <button key={c.id} onClick={()=> onSelect(c.id)} className={`chip inline-flex items-center gap-2 px-3 py-1 rounded-full text-sm font-medium transition ${active===c.id ? 'ring-2 ring-offset-1 ring-blue-500 dark:ring-offset-gray-900 bg-white dark:bg-gray-800' : 'bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-300 dark:hover:bg-gray-700'}`}>
+          <span className="w-6 h-6 rounded-full flex items-center justify-center" style={{background: c.color + '22'}}><c.Icon /></span>
+          <span>{c.name}</span>
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function ImportButton({ onImport }){
+  const ref = useRef(null);
+  function handleFile(e){
+    const f = e.target.files[0]; if(!f) return;
+    const reader = new FileReader();
+    reader.onload = () => onImport(reader.result);
+    reader.readAsText(f);
+    e.target.value = '';
+  }
+  return (
+    <>
+      <input ref={ref} type="file" accept="application/json" className="hidden" onChange={handleFile} />
+      <button onClick={()=> ref.current.click()} className="px-3 py-2 rounded-lg text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition shadow-sm">Importar</button>
+    </>
+  );
+}
+
+/* ---------------- Main App ---------------- */
+
+function App(){
+  const [profile, setProfile] = useState(()=> loadProfile());
+  const [transactions, setTransactions] = useState(()=> loadTransactions());
+  const [editing, setEditing] = useState(null);
+  const [selectedMonth, setSelectedMonth] = useState(()=> new Date().toISOString().slice(0,7));
+  const [activeCategory, setActiveCategory] = useState(null);
+
+  useEffect(()=> saveProfile(profile), [profile]);
+  useEffect(()=> saveTransactions(transactions), [transactions]);
+
+  // derived lists
+  const transactionsForMonth = useMemo(()=> transactions.filter(t => monthKeyFromDate(t.date) === selectedMonth).sort((a,b)=> b.date.localeCompare(a.date)), [transactions, selectedMonth]);
+  const totalForMonth = useMemo(()=> transactionsForMonth.reduce((s,t)=> t.type === 'income' ? s + t.amount : s - t.amount, 0), [transactionsForMonth]);
+
+  const byCategoryForMonth = useMemo(()=> {
+    const map = {}; CATEGORIES.forEach(c => map[c.id] = 0);
+    transactionsForMonth.forEach(t => { if(t.type === 'expense') map[t.category] = (map[t.category] || 0) + t.amount; });
+    return CATEGORIES.map(c => ({ id:c.id, name:c.name, value: map[c.id] })).filter(d => d.value > 0 && (!activeCategory || activeCategory === d.id));
+  }, [transactionsForMonth, activeCategory]);
+
+  const barDataForMonth = useMemo(()=> {
+    const map = {};
+    transactionsForMonth.forEach(t => { const day = t.date.slice(8,10); map[day] = (map[day] || 0) + (t.type === 'expense' ? t.amount : -t.amount); });
+    return Object.entries(map).sort((a,b)=> a[0]-b[0]).map(([k,v])=> ({ label:k, value:v }));
+  }, [transactionsForMonth]);
+
+  const availableMonths = useMemo(()=> {
+    const s = new Set(transactions.map(t => monthKeyFromDate(t.date)));
+    s.add(new Date().toISOString().slice(0,7));
+    return Array.from(s).filter(Boolean).sort().reverse();
+  }, [transactions]);
+
+  // actions
+  function addTransaction(tx){ setTransactions(prev => [tx, ...prev]); }
+  function updateTransaction(updated){ setTransactions(prev => prev.map(p => p.id === updated.id ? updated : p)); setEditing(null); }
+  function deleteTransaction(id){ setTransactions(prev => prev.filter(p => p.id !== id)); }
+  function toggleFixed(id){ setTransactions(prev => prev.map(p => p.id === id ? { ...p, fixed: !p.fixed } : p)); }
+
+  function copyFixedToNextMonth(){
+    const fixedThisMonth = transactionsForMonth.filter(t => t.fixed);
+    if(fixedThisMonth.length === 0) return alert('Não há despesas fixas no mês selecionado.');
+    const [y,m] = selectedMonth.split('-').map(Number);
+    let nm = m+1, ny = y;
+    if(nm > 12){ nm = 1; ny += 1; }
+    const nextMonthKey = `${ny}-${String(nm).padStart(2,'0')}`;
+    const newItems = fixedThisMonth.map(t => ({ ...t, id: genId(), date: addOneMonthToDate(t.date) }));
+    // check duplicates
+    const duplicates = newItems.filter(ni => transactions.some(ex => monthKeyFromDate(ex.date) === nextMonthKey && ex.description === ni.description && ex.amount === ni.amount && ex.category === ni.category));
+    if(duplicates.length > 0){
+      if(!confirm(`Existem ${duplicates.length} despesas iguais no próximo mês. Deseja adicionar mesmo assim?`)) {
+        const nonDup = newItems.filter(ni => !duplicates.some(d => d.description === ni.description && d.amount === ni.amount && d.category === ni.category));
+        if(nonDup.length > 0) setTransactions(prev => [...nonDup, ...prev]);
+        return;
+      }
+    }
+    setTransactions(prev => [...newItems, ...prev]);
+    alert('Despesas fixas copiadas para o próximo mês.');
+  }
+
+  function exportJSON(){
+    const blob = new Blob([JSON.stringify(transactions, null, 2)], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'meus_gastos_backup.json'; a.click(); URL.revokeObjectURL(url);
+  }
+
+  function importJSONString(str){
+    try{
+      const parsed = JSON.parse(str);
+      if(!Array.isArray(parsed)) throw new Error('Formato inválido');
+      const fixed = parsed.map(p => ({ id: p.id || genId(), type: p.type, category: p.category || 'outros', amount: Number(p.amount) || 0, date: p.date || new Date().toISOString().slice(0,10), description: p.description || '', fixed: !!p.fixed }));
+      setTransactions(prev => [...fixed, ...prev]);
+      alert('Importado com sucesso.');
+    } catch(e) { alert('Erro ao importar: ' + e.message); }
+  }
+
+  function gotoPrevMonth(){ const [y,m] = selectedMonth.split('-').map(Number); let nm = m-1, ny = y; if(nm < 1){ nm=12; ny -= 1 } setSelectedMonth(`${ny}-${String(nm).padStart(2,'0')}`); }
+  function gotoNextMonth(){ const [y,m] = selectedMonth.split('-').map(Number); let nm = m+1, ny = y; if(nm > 12){ nm=1; ny +=1 } setSelectedMonth(`${ny}-${String(nm).padStart(2,'0')}`); }
+
+  if(!profile){
+    return (
+      <div className="min-h-screen flex items-center justify-center app-shell p-6">
+        <div className="w-full max-w-md p-6 rounded-2xl bg-gradient-to-br from-indigo-500 to-blue-600 text-white shadow-xl">
+          <h1 className="text-3xl font-bold mb-2">{APP_NAME}</h1>
+          <p className="opacity-90 mb-4">Crie seu perfil rápido para começar a controlar suas finanças.</p>
+          <ProfileForm onSave={(p)=>{ setProfile(p); saveProfile(p); }} />
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="min-h-screen p-0 app-shell">
+      <div className="max-w-6xl mx-auto">
+        {/* HEADER MAIS ROBUSTO E PROFISSIONAL */}
+        <header className="sticky top-0 z-10 bg-inherit/95 backdrop-blur-sm px-6 py-4 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b dark:border-gray-800">
+          <div>
+            <h1 className="text-2xl font-extrabold flex items-center gap-3 text-transparent bg-clip-text bg-gradient-to-r from-green-500 to-blue-500">
+              {APP_NAME}
+            </h1>
+            <div className="text-sm text-gray-500 dark:text-gray-400 mt-1">Olá, <strong className="font-semibold">{profile.name}</strong> 👋</div>
+          </div>
+
+          <div className="flex items-center gap-2">
+            {/* CONTROLE DE MÊS */}
+            <div className="flex items-center gap-1 bg-white dark:bg-gray-800 p-1.5 rounded-lg border dark:border-gray-700 shadow-sm text-sm">
+              <button onClick={gotoPrevMonth} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg>
+              </button>
+              <input type="month" value={selectedMonth} onChange={e => setSelectedMonth(e.target.value)} className="bg-transparent text-sm font-medium w-28 text-center" />
+              <button onClick={gotoNextMonth} className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 transition">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg>
+              </button>
+            </div>
+
+            {/* BOTÕES DE AÇÃO */}
+            <button onClick={copyFixedToNextMonth} className="px-3 py-2 rounded-lg text-sm bg-orange-500 hover:bg-orange-600 text-white transition shadow-md">Copiar fixas →</button>
+            <button onClick={exportJSON} className="px-3 py-2 rounded-lg text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition shadow-sm">Exportar</button>
+            <ImportButton onImport={(txt)=> importJSONString(txt)} />
+            <ThemeToggle />
+          </div>
+        </header>
+
+        {/* CONTEÚDO PRINCIPAL */}
+        <div className="p-6 grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <aside className="lg:col-span-1">
+            <TransactionForm 
+              onAdd={addTransaction} 
+              editing={editing} 
+              onUpdate={updateTransaction} 
+              onCancel={()=> setEditing(null)} 
+            />
+            <div className="mt-4 flex gap-2">
+              <button onClick={()=> { if(confirm('Limpar todas as transações?')) setTransactions([]); }} className="flex-1 py-2 rounded-lg text-sm bg-red-500 hover:bg-red-600 text-white transition shadow-md">Limpar tudo</button>
+              <button onClick={()=> { setTransactions(loadTransactions()); alert('Exemplo restaurado') }} className="flex-1 py-2 rounded-lg text-sm bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 transition">Restaurar Exemplo</button>
+            </div>
+          </aside>
+
+          <main className="lg:col-span-2 space-y-6">
+            {/* CARD DE RESUMO MAIS ELEGANTE */}
+            <div className="p-6 rounded-2xl card">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between">
+                <div className="mb-4 sm:mb-0">
+                  <div className="text-sm font-medium text-gray-500 dark:text-gray-400">Saldo Atual (Mês)</div>
+                  <div className={`text-4xl font-extrabold ${totalForMonth >= 0 ? 'text-green-500' : 'text-red-500'} mt-1`}>R$ {totalForMonth.toFixed(2)}</div>
+                  <div className="text-xs text-gray-500 mt-1">{transactionsForMonth.length} transações registradas</div>
+                </div>
+
+                <div className="w-full sm:w-64 p-4 rounded-lg bg-gray-50 dark:bg-gray-800 shadow-inner">
+                  <div className="text-sm font-medium mb-2 border-b pb-1 dark:border-gray-700">Resumo Rápido</div>
+                  <div className="mt-1 text-sm space-y-1">
+                    <div className="flex justify-between text-green-500"><span>Receitas:</span> <span className="font-semibold">R$ {transactionsForMonth.filter(t=>t.type==='income').reduce((s,t)=> s + t.amount, 0).toFixed(2)}</span></div>
+                    <div className="flex justify-between text-red-500"><span>Despesas:</span> <span className="font-semibold">R$ {transactionsForMonth.filter(t=>t.type==='expense').reduce((s,t)=> s + t.amount, 0).toFixed(2)}</span></div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-6">
+                {/* GRÁFICO DE DONUT E CHIPS */}
+                <div>
+                  <div className="flex items-center justify-between mb-3">
+                    <h4 className="text-lg font-semibold">Despesas por Categoria</h4>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">Clique para filtrar</div>
+                  </div>
+                  <div className="mb-4">
+                    <CategoryChips active={activeCategory} onSelect={(c) => setActiveCategory(c)} />
+                  </div>
+                  <div>
+                    <Donut items={byCategoryForMonth} total={ byCategoryForMonth.reduce((s,d)=> s + d.value, 0) } colors={ byCategoryForMonth.map((d,i)=> ['#10B981','#059669','#06B6D4','#3B82F6','#60A5FA','#7DD3FC','#0EA5A9','#34D399','#FBBF24'][i % 9]) } onSegmentClick={(label)=> {
+                      const found = CATEGORIES.find(c => c.name === label);
+                      if(found) setActiveCategory(found.id);
+                    }} />
+                  </div>
+                </div>
+
+                {/* GRÁFICO DE BARRAS */}
+                <div>
+                  <h4 className="text-lg font-semibold mb-3">Fluxo de Caixa Diário (Líquido)</h4>
+                  <div className="p-4 card">
+                    <FlowBar data={barDataForMonth} />
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* LISTA DE TRANSAÇÕES */}
+            <TransactionList transactions={transactionsForMonth} onEdit={(t)=> setEditing(t)} onDelete={deleteTransaction} onToggleFixed={toggleFixed} />
+          </main>
+        </div>
+
+        <footer className="mt-8 mb-4 text-center text-sm text-gray-500">© 2025 Italo Rocha | Design Aprimorado</footer>
+      </div>
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+</script>
+</body>
+</html>
