@@ -1,0 +1,476 @@
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no" />
+  <title>Meus Gastos — App Style</title>
+
+    <script src="https://cdn.tailwindcss.com"></script>
+  <script>tailwind.config = { darkMode: 'class' }</script>
+
+    <script crossorigin src="https://unpkg.com/react@18/umd/react.development.js"></script>
+  <script crossorigin src="https://unpkg.com/react-dom@18/umd/react-dom.development.js"></script>
+
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+  <style>
+    /* Estilo App Mobile (Verde Menta) */
+    :root {
+      --main-green: #4CAF50; /* Verde principal para o topo */
+      --light-mint: #E8F5E9; /* Fundo suave */
+      --accent-yellow: #FFC107; /* Destaque amarelo (Renda) */
+      --accent-red: #F44336;   /* Destaque vermelho (Despesa) */
+      --text-color: #212121;
+    }
+
+    body { 
+      -webkit-font-smoothing:antialiased; 
+      -moz-osx-font-smoothing:grayscale; 
+      background-color: var(--light-mint);
+      color: var(--text-color);
+    }
+
+    #root {
+      display: flex;
+      justify-content: center;
+      min-height: 100vh;
+    }
+    
+    /* Frame do App para Simular Mobile */
+    .app-frame {
+      width: 100%;
+      max-width: 420px; /* Largura típica de celular */
+      background: white;
+      box-shadow: 0 0 15px rgba(0,0,0,0.2);
+      position: relative;
+      overflow: hidden; /* Garante que a tela de teclado fique no lugar */
+    }
+    
+    .main-header {
+      background-color: var(--main-green);
+      color: white;
+      padding: 16px 20px;
+    }
+    
+    .tab-active {
+      border-bottom: 3px solid white;
+    }
+    
+    /* Botão flutuante */
+    .fab {
+      background-color: var(--accent-yellow);
+      box-shadow: 0 4px 8px rgba(0,0,0,0.2);
+    }
+
+    .chart-card {
+      border-radius: 12px;
+      box-shadow: 0 4px 10px rgba(0,0,0,0.1);
+    }
+    
+    /* Campo de valor da despesa na tela de Adicionar */
+    .value-display {
+      border-bottom: 2px solid var(--main-green);
+      padding-bottom: 4px;
+    }
+    
+    /* Estilo para o teclado */
+    .keypad-btn {
+      background-color: #F5F5F5;
+      border-radius: 8px;
+      color: #424242;
+      font-size: 1.5rem;
+      font-weight: 500;
+      transition: background-color 0.1s;
+    }
+    .keypad-btn:active {
+      background-color: #E0E0E0;
+    }
+    
+    .keypad-ok {
+      background-color: var(--main-green);
+      color: white;
+      font-weight: bold;
+      box-shadow: 0 2px 4px rgba(0,0,0,0.2);
+    }
+    .keypad-ok:active {
+      background-color: #388E3C;
+    }
+    
+    .donut-center { position:absolute; inset:0; display:flex; align-items:center; justify-content:center; pointer-events:none; }
+  </style>
+</head>
+<body class="bg-[#E8F5E9] text-gray-900">
+
+<div id="root"></div>
+
+<script type="text/babel">
+/* Single-file React app: App Mobile (Verde Menta) */
+const { useState, useEffect, useMemo, useRef } = React;
+
+/* ---------------- CONFIG ---------------- */
+const APP_NAME = "Meu Gestor Financeiro";
+const PROFILE_KEY = "meus_gastos_profile_v1";
+const TX_KEY = "meus_gastos_transactions_v1";
+
+/* ---------------- CATEGORIES + ICONS (Ajustadas para o visual) ---------------- */
+function IconHeart(){ return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>); }
+function IconLazer() { return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>); }
+function IconCasa(){ return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>); }
+function IconCafe(){ return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 8h1a4 4 0 0 1 0 8h-1"/><path d="M2 8h16v9a4 4 0 0 1-4 4H6a4 4 0 0 1-4-4V8z"/><line x1="6" y1="1" x2="6" y2="4"/><line x1="10" y1="1" x2="10" y2="4"/><line x1="14" y1="1" x2="14" y2="4"/></svg>); }
+function IconMarket(){ return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M6 3v12M12 3v12M18 3v12"/><path d="M4 18h16a2 2 0 0 1 2 2v2H2v-2a2 2 0 0 1 2-2z"/></svg>);}
+function IconEducation(){ return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l10 5.5v11L12 22 2 17.5V6.5L12 2zM12 22v-9M22 8l-10 5.5L2 8"/></svg>);}
+function IconOthers(){ return (<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="16"/><line x1="8" y1="12" x2="16" y2="12"/></svg>);}
+
+
+const CATEGORIES = [
+  { id: 'saude', name: 'Saúde', color: '#F44336', icon: IconHeart },   // Vermelho
+  { id: 'lazer', name: 'Lazer', color: '#FFC107', icon: IconLazer },   // Amarelo
+  { id: 'moradia', name: 'Casa', color: '#2196F3', icon: IconCasa },   // Azul
+  { id: 'alimentacao', name: 'Café', color: '#009688', icon: IconCafe }, // Verde água
+  { id: 'compras', name: 'Compras de mercado', color: '#4CAF50', icon: IconMarket }, // Verde
+  { id: 'educacao', name: 'Educação', color: '#9C27B0', icon: IconEducation }, // Roxo
+  { id: 'outros', name: 'Outros', color: '#9E9E9E', icon: IconOthers }, // Cinza
+];
+
+/* ---------------- helpers (sem mudanças) ---------------- */
+function genId(){ return 'id-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8); }
+function monthKeyFromDate(dateStr){ return dateStr ? dateStr.slice(0,7) : new Date().toISOString().slice(0,7); }
+function formatBRL(amount){ return `R$ ${Number(amount).toFixed(2).replace('.', ',').replace(/\B(?=(\d{3})+(?!\d))/g, '.')}`; }
+function loadTransactions(){
+  try{
+    const raw = localStorage.getItem(TX_KEY);
+    if(!raw){
+      return [
+        { id:genId(), type:'income', category:'outros', amount:1230, date:'2025-02-01', description:'Salário', fixed:false },
+        { id:genId(), type:'expense', category:'saude', amount:200, date:'2025-02-20', description:'Plano', fixed:true },
+        { id:genId(), type:'expense', category:'compras', amount:56, date:'2025-02-22', description:'Mercado', fixed:false },
+        { id:genId(), type:'expense', category:'alimentacao', amount:14, date:'2025-02-24', description:'Café', fixed:false },
+      ];
+    }
+    return JSON.parse(raw);
+  }catch(e){ console.error(e); return []; }
+}
+function saveTransactions(data){ try{ localStorage.setItem(TX_KEY, JSON.stringify(data)); }catch(e){ console.error(e); } }
+function loadProfile(){ try{ const raw = localStorage.getItem(PROFILE_KEY); return raw ? JSON.parse(raw) : { name: 'Usuário' }; }catch{return { name: 'Usuário' };} }
+function saveProfile(p){ try{ localStorage.setItem(PROFILE_KEY, JSON.stringify(p)); }catch{} }
+
+
+/* ---------------- Charts: donut with center text ---------------- */
+function Donut({ items, total, onSegmentClick }){
+  const canvasRef = useRef(null);
+  
+  const totalExpense = items.reduce((sum, item) => sum + item.value, 0);
+  
+  useEffect(()=>{
+    if(!canvasRef.current) return;
+    
+    // Mapeia os dados para o Chart.js
+    const chartData = items.map(i => i.value);
+    const chartLabels = items.map(i => i.name);
+    const chartColors = items.map(i => CATEGORIES.find(c => c.name === i.name)?.color || '#9E9E9E');
+
+    // Plugin para desenhar o texto central
+    const centerTextPlugin = {
+      id: 'centerText',
+      beforeDraw(chart){
+        const { ctx, width, height } = chart;
+        ctx.save();
+        const value = totalExpense > 0 ? formatBRL(totalExpense) : 'R$ 0,00';
+        ctx.font = `600 ${Math.round(Math.min(width, height)/10)}px sans-serif`;
+        ctx.fillStyle = '#424242';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        ctx.fillText(value, width/2, height/2);
+        ctx.restore();
+      }
+    };
+
+    const old = Chart.getChart(canvasRef.current);
+    if(old) old.destroy();
+    
+    const ch = new Chart(canvasRef.current, {
+      type: 'doughnut',
+      data: { 
+        labels: chartLabels, 
+        datasets: [{ 
+          data: chartData, 
+          backgroundColor: chartColors, 
+          borderColor: 'white', 
+          borderWidth: 4 
+        }] 
+      },
+      options: {
+        cutout: '70%', // Aumentado para mais espaço
+        plugins: { legend: { display: false } },
+        onClick(evt, elems){
+          if(elems.length > 0){
+            const idx = elems[0].index;
+            onSegmentClick && onSegmentClick(chartLabels[idx]);
+          }
+        },
+        animation: { animateScale: true }
+      },
+      plugins: [centerTextPlugin]
+    });
+    return () => ch.destroy();
+  }, [canvasRef, items, onSegmentClick, totalExpense]);
+  
+  return (
+    <div className="relative h-48 w-full max-w-xs mx-auto">
+      <canvas ref={canvasRef} />
+    </div>
+  );
+}
+
+/* ---------------- Components ---------------- */
+
+// Tela de Dashboard (Home)
+function DashboardScreen({ total, transactions, byCategory, selectedMonth, setSelectedMonth, onAddClick, onEdit }){
+  const [activeTab, setActiveTab] = useState('Semana'); // Simula a tab de semana
+  
+  const listItems = useMemo(()=> {
+    return byCategory.sort((a,b) => b.value - a.value).map(item => {
+      const cat = CATEGORIES.find(c => c.name === item.name);
+      const totalAll = byCategory.reduce((s,i) => s + i.value, 0);
+      const percent = totalAll > 0 ? (item.value / totalAll) * 100 : 0;
+      return (
+        <div key={item.id} className="flex items-center justify-between py-3 border-b border-gray-100 last:border-b-0">
+          <div className="flex items-center gap-3 w-1/2">
+            <div className="w-8 h-8 rounded-full flex items-center justify-center text-white" style={{ backgroundColor: cat?.color || '#9E9E9E' }}>
+              {cat && <cat.icon width="16" height="16" strokeWidth="3" />}
+            </div>
+            <span className="text-sm font-medium">{item.name}</span>
+          </div>
+          <div className="flex-1 text-right text-sm text-gray-500">{percent.toFixed(0)}%</div>
+          <div className="flex-1 text-right text-sm font-semibold">{formatBRL(item.value)}</div>
+        </div>
+      );
+    });
+  }, [byCategory]);
+
+  const dateRange = "18 de fev – 24 de fev"; // Simulação da data da imagem
+
+  return (
+    <div className="flex flex-col h-full">
+      {/* HEADER DA DASHBOARD */}
+      <div className="main-header flex flex-col items-center">
+        <div className="flex justify-between w-full mb-2 items-center">
+          <span className="text-white opacity-80 text-sm">Total</span>
+          <button className="p-1"><svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M4 4h16c1.1 0 2 .9 2 2v12c0 1.1-.9 2-2 2H4c-1.1 0-2-.9-2-2V6c0-1.1.9-2 2-2z"/><path d="M16 8l-6 6-4-4"/></svg></button>
+        </div>
+        <div className="text-3xl font-bold mb-3">{formatBRL(total)}</div>
+        <div className="flex w-full justify-between font-medium text-lg pt-2">
+          <span className="tab-active py-1">DESPESAS</span>
+          <span className="opacity-80 py-1">RENDA</span>
+        </div>
+      </div>
+      
+      {/* CONTEÚDO PRINCIPAL COM CARD */}
+      <div className="flex-1 p-4 overflow-y-auto">
+        <div className="bg-white chart-card p-4">
+          <div className="flex justify-between text-gray-500 text-sm font-medium border-b border-gray-100 pb-2 mb-3">
+            {['Dia', 'Semana', 'Mês', 'Ano', 'Período'].map(tab => (
+              <button key={tab} onClick={()=> setActiveTab(tab)} className={`px-2 py-1 transition ${activeTab === tab ? 'border-b-2 border-green-500 text-green-700' : 'hover:text-green-500'}`}>{tab}</button>
+            ))}
+          </div>
+
+          <div className="flex items-center justify-between mb-4">
+            <button className="text-gray-500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"></polyline></svg></button>
+            <span className="font-semibold text-sm">{dateRange}</span>
+            <button className="text-gray-500"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></button>
+          </div>
+
+          {/* GRÁFICO E BOTÃO FLUTUANTE */}
+          <div className="relative mb-4">
+            <Donut 
+              items={byCategory} 
+              total={total} 
+              onSegmentClick={()=>{}} 
+            />
+            <button onClick={() => onAddClick('expense')} className="fab w-12 h-12 rounded-full flex items-center justify-center absolute bottom-4 right-4 text-3xl font-light">+</button>
+          </div>
+          
+          {/* LISTA DE CATEGORIAS */}
+          <div>
+            {listItems}
+            {listItems.length === 0 && <div className="text-center text-gray-500 text-sm py-4">Sem despesas registradas nesta semana.</div>}
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Tela de Adicionar Transação (com Teclado Numérico)
+function AddTransactionScreen({ onAdd, onBack }){
+  const [type, setType] = useState('expense');
+  const [amount, setAmount] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState(CATEGORIES[0].id);
+  
+  function handleKeypad(key){
+    if(key === 'OK') return handleSubmit();
+    if(key === 'DEL') return setAmount(a => a.slice(0, -1));
+    if(key === ',') return amount.includes('.') ? null : setAmount(a => a + (a.length === 0 ? '0.' : '.'));
+    if(amount.length >= 10) return;
+    setAmount(a => a + key);
+  }
+
+  function handleSubmit(){
+    const numAmount = Number(amount);
+    if(isNaN(numAmount) || numAmount <= 0) return alert('Digite um valor válido.');
+    
+    const tx = {
+      id: genId(),
+      type,
+      category: selectedCategory,
+      amount: numAmount,
+      date: new Date().toISOString().slice(0,10),
+      description: '', // Simplificado para o layout da imagem
+      fixed: false
+    };
+    onAdd(tx);
+    onBack(); // Volta para o dashboard
+  }
+  
+  return (
+    <div className="flex flex-col h-full bg-white">
+      {/* HEADER DE ADIÇÃO */}
+      <div className="main-header flex flex-col items-center">
+        <div className="flex justify-between w-full mb-3 items-center">
+          <button onClick={onBack} className="p-1"><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg></button>
+          <span className="text-white text-lg font-semibold">Adicionar transações</span>
+          <span className="w-6"></span>
+        </div>
+        <div className="flex w-full justify-between font-medium text-lg pt-2">
+          <button onClick={()=> setType('expense')} className={`py-1 ${type === 'expense' ? 'tab-active' : 'opacity-80'}`}>DESPESAS</button>
+          <button onClick={()=> setType('income')} className={`py-1 ${type === 'income' ? 'tab-active' : 'opacity-80'}`}>RENDA</button>
+        </div>
+      </div>
+
+      {/* CORPO DA ADIÇÃO (VALOR E CATEGORIAS) */}
+      <div className="p-4 flex flex-col flex-1">
+        {/* CAMPO DE VALOR */}
+        <div className="text-right mb-4">
+          <div className="text-4xl font-light value-display">
+            <span className="text-gray-500 text-xl mr-1">BRL</span>
+            {amount || '0'}
+          </div>
+        </div>
+
+        {/* INFO CONTA E CATEGORIA */}
+        <div className="text-sm space-y-2 mb-4">
+          <div className="text-gray-500">Conta</div>
+          <div className="font-semibold text-green-700 border-b border-gray-100 pb-2">Principal</div>
+          <div className="text-gray-500 pt-2">Categorias</div>
+        </div>
+
+        {/* CATEGORIAS CHIP (Apenas 4 visíveis como na imagem) */}
+        <div className="grid grid-cols-4 gap-4 mb-4">
+          {CATEGORIES.slice(0, 4).map(c => (
+            <button key={c.id} onClick={()=> setSelectedCategory(c.id)} className={`flex flex-col items-center p-2 rounded-lg transition ${selectedCategory === c.id ? 'ring-2 ring-offset-2 ring-green-500' : 'hover:bg-gray-100'}`}>
+              <div className="w-10 h-10 rounded-full flex items-center justify-center text-white" style={{ backgroundColor: c.color }}>
+                <c.icon width="20" height="20" strokeWidth="2.5" />
+              </div>
+              <span className="text-xs mt-1 text-gray-600">{c.name}</span>
+            </button>
+          ))}
+        </div>
+        
+        {/* Simula o botão "Adicionar" central na imagem de referência */}
+        <div className="text-center mb-4">
+          <button onClick={handleSubmit} className="bg-yellow-400 text-gray-800 font-bold py-3 px-8 rounded-full shadow-lg hover:bg-yellow-500 transition">Adicionar</button>
+        </div>
+      </div>
+
+      {/* TECLADO NUMÉRICO FIXO NA PARTE INFERIOR */}
+      <div className="grid grid-cols-4 gap-2 p-3 border-t border-gray-200">
+        {['1', '2', '3', 'DEL', '4', '5', '6', 'OK', '7', '8', '9', ' ', '0', ',', 'DEL', 'OK'].map((key, index) => {
+          let btnClass = 'keypad-btn';
+          let label = key;
+
+          if (key === 'DEL') {
+            btnClass += ' col-span-1 text-red-500';
+            label = <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 4L12 14 2 4M2 20l10-10 10 10"/></svg>;
+          } else if (key === 'OK') {
+            btnClass = 'keypad-btn keypad-ok row-span-2';
+          } else if (key === ' ') {
+            return <div key={index} className="h-full"></div>; // Espaço vazio para alinhar o OK
+          } else if (key === 'DEL' && index === 14) {
+            return <button key={index} onClick={()=> handleKeypad(key)} className={`${btnClass} text-red-500 h-16 flex items-center justify-center`}><svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 4L12 14 2 4M2 20l10-10 10 10"/></svg></button>;
+          } else if (key === 'OK' && index === 15) {
+            return <button key={index} onClick={()=> handleKeypad(key)} className={`${btnClass} h-32 flex items-center justify-center`}>{label}</button>;
+          }
+          
+          // Filtra a tecla 'DEL' da primeira linha para manter apenas uma
+          if(index === 3 || index === 14) return null;
+          
+          return <button key={index} onClick={()=> handleKeypad(key)} className={`${btnClass} h-16 flex items-center justify-center`}>{label}</button>;
+        })}
+      </div>
+    </div>
+  );
+}
+
+
+/* ---------------- Main App ---------------- */
+
+function App(){
+  const [profile, setProfile] = useState(()=> loadProfile());
+  const [transactions, setTransactions] = useState(()=> loadTransactions());
+  const [screen, setScreen] = useState('dashboard'); // 'dashboard' ou 'add'
+  const [selectedMonth, setSelectedMonth] = useState(()=> monthKeyFromDate());
+
+  useEffect(()=> saveProfile(profile), [profile]);
+  useEffect(()=> saveTransactions(transactions), [transactions]);
+
+  // Dados do mês atual (simulando a "Semana" do app, mas usando dados mensais)
+  const transactionsForMonth = useMemo(()=> transactions.filter(t => monthKeyFromDate(t.date) === selectedMonth), [transactions, selectedMonth]);
+  const totalForMonth = useMemo(()=> transactionsForMonth.reduce((s,t)=> t.type === 'income' ? s + t.amount : s - t.amount, 0), [transactionsForMonth]);
+
+  // Despesas por categoria (para o gráfico)
+  const byCategoryForMonth = useMemo(()=> {
+    const map = {};
+    transactionsForMonth.forEach(t => { 
+      if(t.type === 'expense') {
+        const catName = CATEGORIES.find(c => c.id === t.category)?.name || 'Outros';
+        map[catName] = (map[catName] || 0) + t.amount;
+      }
+    });
+    return Object.entries(map).map(([name, value]) => {
+      const cat = CATEGORIES.find(c => c.name === name) || CATEGORIES.find(c => c.id === 'outros');
+      return { id: cat.id, name, value };
+    }).filter(d => d.value > 0);
+  }, [transactionsForMonth]);
+
+  function addTransaction(tx){ setTransactions(prev => [tx, ...prev]); }
+
+  return (
+    <div className="app-frame">
+      {screen === 'dashboard' && (
+        <DashboardScreen 
+          total={totalForMonth} 
+          transactions={transactionsForMonth}
+          byCategory={byCategoryForMonth}
+          selectedMonth={selectedMonth}
+          setSelectedMonth={setSelectedMonth}
+          onAddClick={() => setScreen('add')}
+          onEdit={() => {}} // Não implementado no fluxo simples da imagem
+        />
+      )}
+      
+      {screen === 'add' && (
+        <AddTransactionScreen 
+          onAdd={addTransaction}
+          onBack={() => setScreen('dashboard')}
+        />
+      )}
+    </div>
+  );
+}
+
+ReactDOM.render(<App />, document.getElementById('root'));
+</script>
+</body>
+</html>
